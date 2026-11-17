@@ -859,6 +859,16 @@ class MiniAppAPI:
         user_id = self._user_data_identity(body)
         return {"records": self.user_data.list_records(user_id)}
 
+    def research_record_item(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        user_id = self._user_data_identity(body)
+        record_id = str(body.get("record_id") or "")
+        if not record_id:
+            raise ValidationError("record_id is required")
+        record = self.user_data.get_record(user_id, record_id)
+        if record is None:
+            raise ValidationError("record not found")
+        return {"record": record}
+
     def research_record_create(self, body: Dict[str, Any]) -> Dict[str, Any]:
         user_id = self._user_data_identity(body)
         try:
@@ -1188,6 +1198,9 @@ def make_handler(api: MiniAppAPI):
 
                 if path == "/api/user/research":
                     return self._send_json(api.research_records(body),
+                                           extra_headers=self._rl_headers)
+                if path == "/api/user/research/item":
+                    return self._send_json(api.research_record_item(body),
                                            extra_headers=self._rl_headers)
                 if path == "/api/user/research/create":
                     return self._send_json(api.research_record_create(body),
