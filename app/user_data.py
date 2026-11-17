@@ -120,6 +120,8 @@ class UserDataStore:
         return [self._record(r) for r in rows]
 
     def create_record(self, user_id: str, payload: dict):
+        if not isinstance(payload, dict):
+            raise UserDataError("record must be an object")
         title = payload.get("title")
         content = payload.get("content", "")
         tags = payload.get("tags", [])
@@ -133,7 +135,7 @@ class UserDataStore:
         ):
             raise UserDataError("tags must be a list of up to 20 strings (40 chars each)")
         tags = list(dict.fromkeys(t.strip() for t in tags if t.strip()))
-        if status not in ALLOWED_STATUSES:
+        if not isinstance(status, str) or status not in ALLOWED_STATUSES:
             raise UserDataError("invalid record status")
         rid, now = str(uuid.uuid4()), _now()
         with self._connect() as db:
@@ -172,7 +174,7 @@ class UserDataStore:
             ):
                 raise UserDataError("tags must be a list of up to 20 strings (40 chars each)")
             tags = list(dict.fromkeys(t.strip() for t in tags if t.strip()))
-            if status not in ALLOWED_STATUSES:
+            if not isinstance(status, str) or status not in ALLOWED_STATUSES:
                 raise UserDataError("invalid record status")
             now = _now()
             db.execute(
@@ -224,7 +226,7 @@ class UserDataStore:
             if key in BOOL_SETTINGS:
                 if not isinstance(value, bool):
                     raise UserDataError(f"{key} must be a boolean")
-            elif value not in ALLOWED_SETTINGS[key]:
+            elif not isinstance(value, str) or value not in ALLOWED_SETTINGS[key]:
                 raise UserDataError(f"invalid value for {key}")
         now = _now()
         with self._connect() as db:
