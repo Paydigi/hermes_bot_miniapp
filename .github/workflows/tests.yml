@@ -18,3 +18,7 @@ jobs:
       - run: python -m pip install -r requirements.txt
       - run: python -m pytest -q
       - run: python tests/deploy_check.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: node --check app/webapp/static/app.js
