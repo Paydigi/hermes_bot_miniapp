@@ -275,6 +275,143 @@
     if (el("monitor-status")) {
       loadMonitorStatus();
     }
+    initUserData();
+  }
+
+
+  // ---- Account-owned research records and preferences -----------------
+  async function initUserData() {
+    const createBtn = el("user-record-create");
+    if (!createBtn) return;
+
+    createBtn.addEventListener("click", async () => {
+      const title = el("user-record-title").value.trim();
+      const content = el("user-record-content").value;
+      const tags = el("user-record-tags").value.split(",").map(x => x.trim()).filter(Boolean);
+      const status = el("user-record-status").value;
+      const message = el("user-record-status-message");
+      message.textContent = "Saving…";
+      try {
+        await apiPost("/api/user/research/create", {
+          session_token: state.token,
+          record: { title, content, tags, status }
+        });
+        el("user-record-title").value = "";
+        el("user-record-content").value = "";
+        el("user-record-tags").value = "";
+        el("user-record-status").value = "draft";
+        message.textContent = "Record saved.";
+        await loadUserRecords();
+        await loadUserAudit();
+      } catch (err) {
+        message.textContent = err.message || "Could not save record.";
+      }
+    });
+
+    el("user-settings-save").addEventListener("click", saveUserSettings);
+    await Promise.all([loadUserRecords(), loadUserSettings(), loadUserAudit()]);
+  }
+
+  async function loadUserRecords() {
+    const target = el("user-record-list");
+    if (!target) return;
+    target.textContent = "Loading records…";
+    try {
+      const data = await apiPost("/api/user/research", { session_token: state.token });
+      if (!data.records.length) {
+        target.innerHTML = '<p class="muted">No saved research records yet.</p>';
+        return;
+      }
+      target.innerHTML = data.records.map(record => `
+        <article class="card user-record" data-record-id="${escapeHtml(record.id)}">
+          <label>Title<input class="record-title" maxlength="160" value="${escapeHtml(record.title)}" /></label>
+          <label>Notes<textarea class="record-content" rows="4" maxlength="20000">${escapeHtml(record.content)}</textarea></label>
+          <label>Tags<input class="record-tags" value="${escapeHtml((record.tags || []).join(", "))}" /></label>
+          <label>Status<select class="record-status">
+            ${["draft","active","blocked","completed","archived"].map(v => `<option value="${v}" ${record.status === v ? "selected" : ""}>${v}</option>`).join("")}
+          </select></label>
+          <p class="muted">Updated: ${escapeHtml(record.updated_at)}</p>
+          <div class="row">
+            <button class="btn-primary record-save">Update</button>
+            <button class="btn-ghost record-delete">Delete</button>
+          </div>
+        </article>`).join("");
+      target.querySelectorAll(".user-record").forEach(card => {
+        const id = card.dataset.recordId;
+        card.querySelector(".record-save").addEventListener("click", async () => {
+          try {
+            await apiPost("/api/user/research/update", {
+              session_token: state.token, record_id: id,
+              record: {
+                title: card.querySelector(".record-title").value.trim(),
+                content: card.querySelector(".record-content").value,
+                tags: card.querySelector(".record-tags").value.split(",").map(x => x.trim()).filter(Boolean),
+                status: card.querySelector(".record-status").value
+              }
+            });
+            toast("Research record updated", "success");
+            await loadUserRecords();
+            await loadUserAudit();
+          } catch (err) { toast(err.message || "Update failed", "error"); }
+        });
+        card.querySelector(".record-delete").addEventListener("click", async () => {
+          if (!await confirmDialog("Delete research record?", "This permanently deletes this record.", "Delete", true)) return;
+          try {
+            await apiPost("/api/user/research/delete", { session_token: state.token, record_id: id });
+            toast("Research record deleted", "success");
+            await loadUserRecords();
+            await loadUserAudit();
+          } catch (err) { toast(err.message || "Delete failed", "error"); }
+        });
+      });
+    } catch (err) {
+      target.textContent = err.message || "Could not load research records.";
+    }
+  }
+
+  async function loadUserSettings() {
+    try {
+      const data = await apiPost("/api/user/settings", { session_token: state.token });
+      el("user-setting-locale").value = data.settings.locale;
+      el("user-setting-theme").value = data.settings.theme;
+      el("user-setting-chain").value = data.settings.default_chain;
+      el("user-setting-notifications").checked = !!data.settings.notifications;
+    } catch (err) {
+      el("user-settings-status").textContent = err.message || "Could not load settings.";
+    }
+  }
+
+  async function saveUserSettings() {
+    const status = el("user-settings-status");
+    status.textContent = "Saving…";
+    try {
+      await apiPost("/api/user/settings", {
+        session_token: state.token,
+        settings: {
+          locale: el("user-setting-locale").value,
+          theme: el("user-setting-theme").value,
+          default_chain: el("user-setting-chain").value,
+          notifications: el("user-setting-notifications").checked
+        }
+      });
+      status.textContent = "Settings saved.";
+      await loadUserAudit();
+    } catch (err) {
+      status.textContent = err.message || "Could not save settings.";
+    }
+  }
+
+  async function loadUserAudit() {
+    const target = el("user-audit-list");
+    if (!target) return;
+    try {
+      const data = await apiPost("/api/user/audit", { session_token: state.token, limit: 50 });
+      target.innerHTML = data.events.length
+        ? data.events.map(event => `<p><strong>${escapeHtml(event.action)}</strong> · ${escapeHtml(event.entity_type)} · ${escapeHtml(event.changed_at)}</p>`).join("")
+        : '<p class="muted">No changes recorded yet.</p>';
+    } catch (err) {
+      target.textContent = err.message || "Could not load change history.";
+    }
   }
 
   // API helper that works with the new onboarding
