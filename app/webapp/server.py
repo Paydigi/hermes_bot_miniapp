@@ -64,6 +64,7 @@ from ..crypto_tools import (
 from ..puzzles.attack import guess_candidates, plan_attack, run_attack
 from ..puzzle_types import FAMILIES, classify_catalog, classify_puzzle, classify_text
 from ..users import UserStore
+from ..user_data import UserDataStore, UserDataError
 from .ratelimit import RateLimiter
 
 log = get_logger()
@@ -83,6 +84,7 @@ class MiniAppAPI:
         self.service = service
         self.settings = settings or service.settings
         self.limiter = limiter
+        self.user_data = UserDataStore(self.settings.log_dir.parent / ".run" / "user_data.sqlite3")
 
     # -- GET --------------------------------------------------------------
     def health(self) -> Dict[str, Any]:
@@ -838,6 +840,77 @@ class MiniAppAPI:
         stats["status"] = "✓"
         return stats
 
+
+    # -- authenticated user-owned research data and preferences -----------
+    def _user_data_identity(self, body: Dict[str, Any]) -> str:
+        from ..auth import validate_session
+        token = body.get("session_token")
+        if not isinstance(token, str) or not token:
+            raise SignatureError("session_token is required")
+        session = validate_session(token)
+        if session is None:
+            raise SignatureError("invalid or expired session")
+        user_id = session.get("user_id")
+        if not user_id:
+            raise SignatureError("session has no user identity")
+        return str(user_id)
+
+    def research_records(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        user_id = self._user_data_identity(body)
+        return {"records": self.user_data.list_records(user_id)}
+
+    def research_record_item(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        user_id = self._user_data_identity(body)
+        record_id = str(body.get("record_id") or "")
+        if not record_id:
+            raise ValidationError("record_id is required")
+        record = self.user_data.get_record(user_id, record_id)
+        if record is None:
+            raise ValidationError("record not found")
+        return {"record": record}
+
+    def research_record_create(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        user_id = self._user_data_identity(body)
+        try:
+            return {"record": self.user_data.create_record(user_id, body.get("record") or {})}
+        except UserDataError as exc:
+            raise ValidationError(str(exc)) from exc
+
+    def research_record_update(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        user_id = self._user_data_identity(body)
+        record_id = str(body.get("record_id") or "")
+        if not record_id:
+            raise ValidationError("record_id is required")
+        try:
+            record = self.user_data.update_record(user_id, record_id, body.get("record") or {})
+        except UserDataError as exc:
+            raise ValidationError(str(exc)) from exc
+        if record is None:
+            raise ValidationError("record not found")
+        return {"record": record}
+
+    def research_record_delete(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        user_id = self._user_data_identity(body)
+        record_id = str(body.get("record_id") or "")
+        if not record_id:
+            raise ValidationError("record_id is required")
+        if not self.user_data.delete_record(user_id, record_id):
+            raise ValidationError("record not found")
+        return {"deleted": True, "record_id": record_id}
+
+    def user_settings(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        user_id = self._user_data_identity(body)
+        if "settings" not in body:
+            return {"settings": self.user_data.get_settings(user_id)}
+        try:
+            return {"settings": self.user_data.update_settings(user_id, body["settings"])}
+        except UserDataError as exc:
+            raise ValidationError(str(exc)) from exc
+
+    def user_audit(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        user_id = self._user_data_identity(body)
+        return {"events": self.user_data.audit_log(user_id, body.get("limit", 100))}
+
     # -- security research ------------------------------------------------
     def security_research(self, body: Dict[str, Any]) -> Dict[str, Any]:
         """Return the security research workflow."""
@@ -1121,6 +1194,28 @@ def make_handler(api: MiniAppAPI):
                                            extra_headers=self._rl_headers)
                 if path == "/api/wallet/list":
                     return self._send_json(api.wallet_list(body),
+                                           extra_headers=self._rl_headers)
+
+                if path == "/api/user/research":
+                    return self._send_json(api.research_records(body),
+                                           extra_headers=self._rl_headers)
+                if path == "/api/user/research/item":
+                    return self._send_json(api.research_record_item(body),
+                                           extra_headers=self._rl_headers)
+                if path == "/api/user/research/create":
+                    return self._send_json(api.research_record_create(body),
+                                           extra_headers=self._rl_headers)
+                if path == "/api/user/research/update":
+                    return self._send_json(api.research_record_update(body),
+                                           extra_headers=self._rl_headers)
+                if path == "/api/user/research/delete":
+                    return self._send_json(api.research_record_delete(body),
+                                           extra_headers=self._rl_headers)
+                if path == "/api/user/settings":
+                    return self._send_json(api.user_settings(body),
+                                           extra_headers=self._rl_headers)
+                if path == "/api/user/audit":
+                    return self._send_json(api.user_audit(body),
                                            extra_headers=self._rl_headers)
                 if path == "/api/user/stats":
                     return self._send_json(api.user_stats(body),

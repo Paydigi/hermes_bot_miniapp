@@ -546,3 +546,38 @@ bash scripts/run_bot.sh
 Public routes are read-only. There is still no send/sign/broadcast endpoint
 (404), so a publicly reachable URL exposes no ability to move funds.
 
+
+
+## User-owned research records and preferences
+
+The authenticated account API supports application data management without
+changing the wallet inspection boundary. Every request below requires a valid
+email-account `session_token`. The server derives the owner from the validated
+session; a caller-supplied `user_id` is never trusted.
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/api/user/research` | List the caller's research records |
+| POST | `/api/user/research/item` | Read one own record using `record_id` |
+| POST | `/api/user/research/create` | Create a record from `record` |
+| POST | `/api/user/research/update` | Update own record using `record_id` + `record` |
+| POST | `/api/user/research/delete` | Delete own record using `record_id` |
+| POST | `/api/user/settings` | Read settings; include `settings` to update |
+| POST | `/api/user/audit` | Read the caller's latest mutation events |
+
+Research record fields: `title` (1–160 chars), `content` (up to 20,000
+chars), `tags` (up to 20 tags, 40 chars each), and `status` (`draft`,
+`active`, `blocked`, `completed`, or `archived`). Records are stored in
+`.run/user_data.sqlite3`, outside the static web root, with SQLite foreign-key
+checks and a private database file mode.
+
+Allowed preferences are `locale` (`en` / `lv`), `theme` (`system` /
+`light` / `dark`), `default_chain` (supported chain allowlist), and
+`notifications` (boolean). Server credentials, bot tokens, session secrets,
+filesystem paths, wallet keys, and global configuration cannot be changed
+through this API.
+
+Each successful create/update/delete/settings mutation writes a per-user audit
+event. Audit records contain action and field metadata, not research content.
+Wallet asset inspection remains public-data-only; these endpoints do not add
+transaction signing, broadcasting, or fund movement.
