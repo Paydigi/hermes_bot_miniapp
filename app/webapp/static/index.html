@@ -423,6 +423,51 @@
             <p class="muted">Live bounty programs from Cantina, Immunefi, Sherlock, Superteam.</p>
             <div id="research-opportunities"></div>
           </section>
+
+          <section class="card" id="personal-research-card">
+            <h2>My Research Records</h2>
+            <p class="muted">Create and manage your private research notes. These records are tied to your signed-in account. Never store seed phrases, private keys, passwords, or API tokens here.</p>
+            <div class="form-grid">
+              <input id="user-record-title" type="text" maxlength="160" placeholder="Record title" />
+              <textarea id="user-record-content" rows="4" maxlength="20000" placeholder="Research notes (no secrets or wallet credentials)"></textarea>
+              <input id="user-record-tags" type="text" placeholder="Tags, separated by commas" />
+              <select id="user-record-status">
+                <option value="draft">Draft</option>
+                <option value="active">Active</option>
+                <option value="blocked">Blocked</option>
+                <option value="completed">Completed</option>
+                <option value="archived">Archived</option>
+              </select>
+              <button id="user-record-create" class="btn-primary">Save new record</button>
+            </div>
+            <p class="status" id="user-record-status-message"></p>
+            <div id="user-record-list"></div>
+          </section>
+          <section class="card" id="personal-settings-card">
+            <h2>My App Settings</h2>
+            <div class="form-grid">
+              <label>Language
+                <select id="user-setting-locale"><option value="en">English</option><option value="lv">Latviešu</option></select>
+              </label>
+              <label>Theme
+                <select id="user-setting-theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
+              </label>
+              <label>Default chain
+                <select id="user-setting-chain">
+                  <option value="ethereum">Ethereum</option><option value="bitcoin">Bitcoin</option>
+                  <option value="polygon">Polygon</option><option value="base">Base</option>
+                  <option value="arbitrum">Arbitrum</option><option value="optimism">Optimism</option>
+                </select>
+              </label>
+              <label><input id="user-setting-notifications" type="checkbox" /> Notifications</label>
+              <button id="user-settings-save" class="btn-primary">Save settings</button>
+            </div>
+            <p class="status" id="user-settings-status"></p>
+          </section>
+          <section class="card">
+            <h2>My Change History</h2>
+            <div id="user-audit-list"><p class="muted">Loading…</p></div>
+          </section>
           <section class="card">
             <h2>Common Pitfalls</h2>
             <ul class="security-tips" id="research-pitfalls"></ul>
