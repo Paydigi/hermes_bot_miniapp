@@ -119,6 +119,14 @@ class UserDataStore:
             ).fetchall()
         return [self._record(r) for r in rows]
 
+    def get_record(self, user_id: str, record_id: str):
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT * FROM research_records WHERE id=? AND user_id=?",
+                (record_id, user_id),
+            ).fetchone()
+        return self._record(row) if row is not None else None
+
     def create_record(self, user_id: str, payload: dict):
         if not isinstance(payload, dict):
             raise UserDataError("record must be an object")
