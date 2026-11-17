@@ -303,3 +303,86 @@ class TestWalletOwnerKeyUserSessions:
                              {"session_token": "tok-old"})
         assert status == 400
         assert data["error"] == "SignatureError"
+
+
+
+class TestUserDataApi:
+    @pytest.fixture(autouse=True)
+    def fake_sessions(self, monkeypatch):
+        from app import auth
+
+        def validate(token):
+            if token == "alice-token":
+                return {"user_id": "alice", "expires_at": 9999999999}
+            if token == "bob-token":
+                return {"user_id": "bob", "expires_at": 9999999999}
+            return None
+
+        monkeypatch.setattr(auth, "validate_session", validate)
+
+    def test_private_research_api_requires_a_session(self, live_server):
+        status, body = post(live_server + "/api/user/research", {})
+        assert status == 400
+        assert body["error"] == "SignatureError"
+
+    def test_research_crud_and_user_isolation(self, live_server):
+        status, created = post(live_server + "/api/user/research/create", {
+            "session_token": "alice-token",
+            "record": {"title": "Audit notes", "content": "offline", "status": "active"},
+        })
+        assert status == 200
+        record_id = created["record"]["id"]
+
+        status, bob = post(live_server + "/api/user/research", {
+            "session_token": "bob-token",
+        })
+        assert status == 200
+        assert bob["records"] == []
+
+        status, denied = post(live_server + "/api/user/research/update", {
+            "session_token": "bob-token", "record_id": record_id,
+            "record": {"title": "tampered"},
+        })
+        assert status == 400
+        assert denied["error"] == "ValidationError"
+
+        status, updated = post(live_server + "/api/user/research/update", {
+            "session_token": "alice-token", "record_id": record_id,
+            "record": {"status": "completed"},
+        })
+        assert status == 200
+        assert updated["record"]["status"] == "completed"
+
+        status, deleted = post(live_server + "/api/user/research/delete", {
+            "session_token": "alice-token", "record_id": record_id,
+        })
+        assert status == 200
+        assert deleted["deleted"] is True
+
+    def test_settings_allowlist_and_audit_endpoint(self, live_server):
+        status, saved = post(live_server + "/api/user/settings", {
+            "session_token": "alice-token",
+            "settings": {"locale": "lv", "theme": "dark"},
+        })
+        assert status == 200
+        assert saved["settings"]["locale"] == "lv"
+
+        status, denied = post(live_server + "/api/user/settings", {
+            "session_token": "alice-token",
+            "settings": {"session_secret": "no"},
+        })
+        assert status == 400
+
+        status, events = post(live_server + "/api/user/audit", {
+            "session_token": "alice-token",
+        })
+        assert status == 200
+        assert events["events"]
+        assert events["events"][0]["action"] == "update"
+
+    def test_malformed_record_payload_is_a_400_not_500(self, live_server):
+        status, body = post(live_server + "/api/user/research/create", {
+            "session_token": "alice-token", "record": "not-an-object",
+        })
+        assert status == 400
+        assert body["error"] == "ValidationError"
