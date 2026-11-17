@@ -558,6 +558,7 @@ session; a caller-supplied `user_id` is never trusted.
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/api/user/research` | List the caller's research records |
+| POST | `/api/user/research/item` | Read one own record using `record_id` |
 | POST | `/api/user/research/create` | Create a record from `record` |
 | POST | `/api/user/research/update` | Update own record using `record_id` + `record` |
 | POST | `/api/user/research/delete` | Delete own record using `record_id` |
